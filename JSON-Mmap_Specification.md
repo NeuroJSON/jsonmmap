@@ -1,4 +1,4 @@
-JSON-MMap: A Specification for JSON/binary JSON memory-map (mmap) for fast file IO
+JSON-Mmap: A Specification for JSON/binary JSON memory-map (mmap) for fast file IO
 ============================================================
 
 - **Status of this document**: This document is currently under development.
@@ -12,7 +12,7 @@ JSON-MMap: A Specification for JSON/binary JSON memory-map (mmap) for fast file 
 for storage of lightweight hierachical data. However, when accessing large data records
 inside a JSON/binary-JSON file, file reading/writing can be slow. This specification
 aims to define a lightweight memory-mapping (mmap) table to enable fast disk-mapped
-file IO for JSON and binary JSON formats. This JSON-MMap table can be embedded in the same
+file IO for JSON and binary JSON formats. This JSON-Mmap table can be embedded in the same
 data file or in a separate file. Using the byte-offset/length information stored in the
 JSON-Mmap allows to read or update particular data record without needing to parse or
 overwrite the entire data file, leading to dramatic performance improvement.
@@ -22,16 +22,16 @@ overwrite the entire data file, leading to dramatic performance improvement.
 
 - [Introduction](#introduction)
     * [Background](#background)
-    * [JSON and Binary JSON](#json-and-binary-json)
-    * [JData specification](#jdata-specification)
+    * [Overview](#overview)
 - [Grammar](#grammar)
-    * [Text-based JData storage grammar](#text-based-jdata-storage-grammar)
-    * [Binary JData storage grammar](#binary-jdata-storage-grammar)
-- [Data Models](#data-models)
-    * [Topological models](#topological-models)
-    * [Semantic models](#semantic-models)
-- [Converting Between JData Files](#converting-between-jdata-files)
-- [Data Referencing and Links](#data-referencing-and-links)
+    * [Path string](#path-string)
+    * [Locator vector](#locator-vector)
+    * [Metadata keys and values](#metadata-keys-and-values)
+    * [Storage of the JSON-Mmap table](#storage-of-the-json-mmap-table)
+- [Sample utilities of JSON-Mmap](#sample-utilities-of-json-mmap)
+    * [Fast data-record disk reading](#fast-data-record-disk-reading)
+    * [On-disk value replacement with equal or less bytes](#on-disk-value-replacement-with-equal-or-less-bytes)
+    * [On-disk value replacement with more bytes](#on-disk-value-replacement-with-more-bytes)
 - [Recommended File Specifiers](#recommended-file-specifiers)
 - [Summary](#summary)
 
@@ -65,13 +65,15 @@ array (ND-arrays), binary-JSON parsers may still show inferior efficiency compar
 to mmap-based binary file IO over traditional fixed-sized binary files (which lack of
 the capability of extension compared to JSON and binary JSON).
 
+### Overview
+
 In this specification, we aim to define a lightweight JSON-based mmap-table structure that
 can be embedded inside a JSON or binary JSON file or stored side-by-side along the JSON/binary
 JSON file to drmatically enhance their file IO efficiencies. The JSON-Mmap table is lightweight
 and follows a simple structure to record essential serialization data of key records, including
 disk/memory linear byte-offset and length. Reading/writing JSON-Mmap table does not require
 additional parser/writer because it must be stored/accessed using the same format as the
-respective target data file (JSON or binary-JSON). Creating and utilizing JSON-MMap records
+respective target data file (JSON or binary-JSON). Creating and utilizing JSON-Mmap records
 can be particularly beneficial when using the combination of JSON/[BJData](https://neurojson.org/bjdata)
 serializations with [JData annotation](https://neurojson.org/jdata) methods for storing and
 exchange of large sized scientific data files such as medical imaging scans.
@@ -106,7 +108,7 @@ In each of the sub-arrays,
 - when the frist string is a **metadata key**, the second element denotes the value of the metadata,
   some recommended metadata key value formats are listed below.
 
-## Path string
+### Path string
 
 The format of the path string is inspired and largely similar to the syntax of
 [JSON-Path](https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html), where
@@ -157,7 +159,7 @@ the following
 |`$[1].schedule`                       | the value of the `schedule` object `{"Wednesday": [10]}`  |
 
 
-## Locator vector
+### Locator vector
 
 The locator vector must be an array (can be empty). It should have the following form
 ```
@@ -179,21 +181,22 @@ where
   after the separator mark `,` with the preceding objects, or a significant character of the enclosing parent object.
 - additional elements in the locator vector are reserved for future extension of this specification
 
-## Optional metadata keys and values
+## Metadata keys and values
 
 
-## Location of the JSON-Mmap table
+### Storage of the JSON-Mmap table
+
 
 Suggested use of JSON-Mmap
 ------------------------
 
-## Fast data-record-level disk reading
+### Fast data-record disk reading
 
 
-## On-disk value replacement with equal or less bytes
+### On-disk value replacement with equal or less bytes
 
 
-## On-disk value replacement with more bytes
+### On-disk value replacement with more bytes
 
 
 Recommended File Specifiers

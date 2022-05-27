@@ -1,0 +1,3 @@
+[submodule "lib/jsonlab"]
+	path = lib/jsonlab
+	url = https://github.com/NeuroJSON/jsonlab.git

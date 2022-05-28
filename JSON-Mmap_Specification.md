@@ -333,7 +333,7 @@ the closing `}` of the `"_DataInfo_"` object).
             ["$",     [...]],
             ["$.key", [...]],
             ...
-        }
+        ]
     }
 }{
     data1

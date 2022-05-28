@@ -185,7 +185,7 @@ the following
 
 The locator vector must be an array (can be empty). It should have the following form
 ```
-[<start>, <length>, <whitespace-byte-length-after>, <whitespace-byte-length-before> ...]
+[<start>, <length>, <whitespace-byte-length-before>, <whitespace-byte-length-after> ...]
 ```
 where
 
@@ -392,19 +392,86 @@ access to individual records without eneding to read/parse the entire referenced
 
 ```
 [
-    ["$.key", ]
+    ["$.key", [14,4,1]]
 ]{
     "key": 1024
 }
 ```
 
-A C implementation 
+On can utilize the `start` and `length` information from the mmap table to quickly read/parse
+a specific data record without needing to read/parse the entire data file
 
+```c
+int read_json_int_key(const int start, const int length, int *value, const char *datafile){
+    FILE fp=fopen(datafile, "rb");
+    if(fp==NULL)
+        return 1;
+    if(fseek(fp, start-1, SEEK_SET))
+        return 1;
+    if(fscanf(fp, "%d", value)!=1)
+        return 1;
+    fclose(fp);
+    return 0;
+}
+```
 
 ### On-disk value replacement with equal or less bytes
 
+Using the mmap information, one can also quickly update specific data records inside a large
+JSON/binary JSON file without needing to overwriting the entire document.
+
+As we discussed above, removing or adding insignificant characters (whitespaces in JSON
+or the `N` marker in UBJSON/BJData) before or after a data record makes no impact to the integrity
+of the data file. Therefore, when updating a specified data record, the maximum byte that is
+available to write user-specified new value can be expressed by
+```
+maxlength = <length> + <whitespace-byte-length-before> + <whitespace-byte-length-after>
+```
+where `<length>`, `<whitespace-byte-length-before>`, `<whitespace-byte-length-after>` are the 2nd,
+3rd and 4th elements of the locator vector, if present. If any of these values do not present,
+the worst-case can be estimated by setting it to 0.
+
+Two senariors are considered: if the byte length to store the new value is shorter or equal to
+the estimated `maxlength`, then, one should be able to directly overwrite the existing value
+in the associated file or stream.
+
+```c
+int write_json_int_key(const int start, const int length, const int wspre, const int wspost,
+                       const int newvalue, const char *datafile){
+    int maxlength = length + wspre + wspost;
+    FILE fp=fopen(datafile, "rb");
+    if(fp==NULL)
+        return 1;
+    if(fseek(fp, start-1, SEEK_SET))
+        return 1;
+
+    char *buf=malloc(maxlength);
+    int len=snprintf(buf, maxlength, "%d", newvalue);
+    if(len < maxlength)
+        memset(buf+len, ' ', maxlength - len);
+    if(fwrite(buf, maxlength, 1, fp)!=1){
+        free(buf);
+        return 1;
+    }
+    free(buf);
+    fclose(fp);
+    return 0;
+}
+```
 
 ### On-disk value replacement with more bytes
+
+When storing the new value requires more bytes than the available on-disk byte length of the
+old value (including pre- and post-insignficiant characters), one may have to make a choice
+between several strategies:
+
+- one may warn the user of over-length and refuse to write the new value
+- one may truncate the data, when permitted, and store partial data
+- one may write a compact JSON-Path like path string, such as `"$[1]"}`, in the place of the 
+  original record, and point it to a new data record appended at the end of the file/stream.
+
+In the last case, 
+
 
 
 Recommended File Specifiers

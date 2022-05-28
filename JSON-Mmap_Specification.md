@@ -25,6 +25,7 @@ overwrite the entire data file, leading to dramatic performance improvement.
     * [Overview](#overview)
 - [Syntax](#syntax)
     * [Path string](#path-string)
+    * [Significant and insignficant characters](#significant-and-insignficant-characters)
     * [Locator vector](#locator-vector)
     * [Metadata keys and values](#metadata-keys-and-values)
     * [Storage of the JSON-Mmap table](#storage-of-the-json-mmap-table)
@@ -97,16 +98,36 @@ A JSON-Mmap must be written as an **array of arrays**, with each element being a
 
 In each of the sub-arrays, 
 - the first element must be a string; such string can be one of the two cases:
-    - a string starting with ASCII letter `$` (`0x24` in hex or ) is referred to as a **path**,
-      representing a JSON-Path like reference, pointing towards a specific data record to the
-      mapped JSON/binary JSON file, and
-    - any string that does not start with `$` is referred to as a **metadata key**, to store optional
-      auxillary information related to the JSON-Mmap.
-- when the first string is a **path**, the second element must be an array of integers, hereinafter
-  referred to as the **locator**, containing various information regarding the byte-location of the
+    - a string starting with ASCII letter `$` (`0x24` in hex) is referred to as a **path**,
+      representing a [JSON-Path](https://github.com/json-path/JsonPath) like reference, 
+      pointing towards a specific data record to the associated JSON/binary JSON file, and
+    - any string that does not start with `$` is referred to as a **metadata key**, to store
+      optional auxillary information related to the JSON-Mmap,
+- when the first string is a **path**, the second element must be an array of numeric values, hereinafter
+  referred to as the **locator vector**, containing various information regarding the byte-location of the
   serialized data record on the disk or memory buffer
 - when the frist string is a **metadata key**, the second element denotes the value of the metadata,
   some recommended metadata key value formats are listed below.
+
+### Significant and insignficant characters
+
+In a JSON document, zero or more white-spaces can be inserted between data items without alternating
+the data structure stored in the document. Four white-space characters are permitted:
+
+- space (` `): 0x20 in hex (ASCII code: 32)
+- linefeed (`\n`): 0x0A in hex (ASCII code: 20)
+- carrage return (`\r`): 0x0D in hex (ASCII code: 13)
+- horizontal tab (`\t`): 0x09 in hex (ASCII code: 9)
+
+We call the above white-space characters as **insignificant characters** and all non-white-space 
+characters as **significant characters** in a JSON document.
+
+Similarly, in a BJData/UBJSON document, zero or more `no-op` marker `N` can be inserted between data
+items without alternating the data stored in such file. As a result, we call the `no-op` marker `N` as
+**insignificant character** and all other bytes that are not `no-op` are called **significant characters**.
+
+Other binary JSON formats such as CBOR and MessagePack do not support `no-op` markers or optional
+white-spaces, therefore, all bytes in these files are considered signficiant characters.
 
 ### Path string
 
@@ -164,23 +185,75 @@ the following
 
 The locator vector must be an array (can be empty). It should have the following form
 ```
-[<offset>, <length>, <white-space-byte-length-after>, <white-space-byte-length-before> ...]
+[<start>, <length>, <white-space-byte-length-after>, <white-space-byte-length-before> ...]
 ```
 where
 
-- (recommended) the first number `<offset>`, if present, must be an integer, denoting the byte-offset of the first
-  significant character (i.e. must not be a white-space or `no-op` marker) of the referenced value
-  from the begining of the referenced document, 
+- (recommended) the first number `<start>`, if present, must be an integer, denoting the byte position 
+  (starting from 1) of the first significant character of the referenced value from the begining of 
+  the referenced document, 
 - (recommended) the second number `<length>`, if present, must be an intger, denoting the end-to-end byte-length
   of the referenced value between the first significant character and the last significant character
   (inclusive)
-- (optional) the third number, `<white-space-byte-length-after>`, if present, must be an integer, denoting the
-  byte-lengt of all whitespaces (non-significant character) after the last signficiant character and
-  before the separator mark `,` with the following objects, or the next significant character of the parent object.
 - (optional) the third number, `<white-space-byte-length-before>`, if present, must be an integer, denoting the
-  byte-lengt of all whitespaces (non-significant character) before the first signficiant character and
+  byte-lengt of all whitespaces (insignificant character) before the first signficiant character and
   after the separator mark `,` with the preceding objects, or a significant character of the enclosing parent object.
+- (optional) the forth number, `<white-space-byte-length-after>`, if present, must be an integer, denoting the
+  byte-lengt of all whitespaces (insignificant character) after the last signficiant character and
+  before the separator mark `,` with the following objects, or the next significant character of the parent object.
 - additional elements in the locator vector are reserved for future extension of this specification
+
+Both the optional `<white-space-byte-length-before>` and `<white-space-byte-length-after>` records are
+designed for the purpose of **in-place on-disk value replacement** of the data records. See
+[Sample utilities of JSON-Mmap](#sample-utilities-of-json-mmap) section for detailed discussions.
+
+For example, for the below JSON string buffer
+```json
+1         11        21        31        41        51        61        71        81 (byte index)
+1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 
+{"name" :  "Andy" , "schedule": { "Mon": [ 10 , 14], "Tue": null, "Wed":10.5 } }
+           ^--                  ^--      ^--                ^--         ^--    : starting positions
+         ‾‾                    ‾        ‾ ‾    ‾           ‾                   : preceding white-spaces
+```
+
+the corresponding JSON-Mmap is
+```json
+[
+    ["$",                [1, 80]],
+    ["$.name",           [12, 6, 2]],
+    ["$.schedule",       [33, 47, 1]],
+    ["$.schedule.Mon",   [42, 10, 1]],
+    ["$.schedule.Mon[1]",[49, 2, 1]],
+    ["$.schedule.Tue",   [64, 4, 1]],
+    ["$.schedule.Wed",   [73, 4]]
+]
+```
+**Note**: a JSON-Mmap does not have to contain mappings of all data elements of a document; it may contain
+only a selected subset of data elements.
+
+Similarly, the above JSON document can also be stored as a [BJData](https://neurojson.org/bjdata/draft2)/
+[UBJSON](http://ubjson.org/) buffer in the below form (here numbers are printed in ASCII form instead
+of their binary forms; we adjusted the byte-index indicators accordingly to match their correct binary
+lengths; the `name` section of the data are underscored for easy readability)
+
+```
+1         11        21        31          41          53        61        71    (byte index)
+1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3  5  7 9 1 3 5 7 9   3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3
+{U4nameSU4AndyU4schedule{U3Mon[i10i14]U3TueZU3Wedd10.5}}
+ ‾‾‾‾‾‾       ‾‾‾‾‾‾‾‾‾‾ ‾‾‾‾‾        ‾‾‾‾‾ ‾‾‾‾‾
+```
+the corresponding JSON-Mmap is
+```json
+[
+    ["$",                [1, 54]],
+    ["$.name",           [8, 7]],
+    ["$.schedule",       [25, 19]],
+    ["$.schedule.Mon",   [31, 6]],
+    ["$.schedule.Mon[1]",[34, 2]],
+    ["$.schedule.Tue",   [42, 1]],
+    ["$.schedule.Wed",   [48, 5]]
+]
+```
 
 ## Metadata keys and values
 
@@ -225,14 +298,14 @@ JSON data in the form of a concatenated JSON object. An example is shown below
 ```
 
 An in-line JSON-Mmap is automatically assumed to be associated with the concatenated
-JSON object immediately following the mmap table; the `offset` record in
+JSON object immediately following the mmap table; the `start` record in
 all **locator vector** assumes the start of the referenced data buffer immediately
 follows the last signficant character of the JSON-Mmap (in the above case,
 the closing bracket `]`).
 
 When white-spaces are inserted between the JSON-Mmap and the following JSON object,
 such as new-lines `\n` or spaces, the length of such padded bytes must be considered
-in the `offset` records.
+in the `start` records.
 
 Multiple inline JSON-Mmap tables can be used in the same document, each preceding
 its associated JSON object
@@ -252,8 +325,8 @@ the closing `}` of the `"_DataInfo_"` object).
 ```json
 {
     "_DataInfo_": {
-        "Creator": "NeuroSJON",
-        "Comment": "NeuroSJON",
+        "Creator": "NeuroJSON",
+        "Comment": "NeuroJSON",
         "mmap": [
             ["MmapVersion", "0.5"],
             ["Comment", "mmap for data1"],
@@ -312,8 +385,9 @@ Sample utilities of JSON-Mmap
 Recommended File Specifiers
 ------------------------------
 
-For standalone JSON-based JData file, the recommended file suffix is **`".jmmap"`**; for 
-the binary JData (BJData) file, the recommended file suffix is **`".bmmap"`**.
+For standalone JSON-based JSON-Mmap files, the recommended file suffix is **`".jmmap"`**; 
+for standalong binary-JData (BJData) based JSON-Mmap files, the recommended file suffix
+is **`".bmmap"`**.
 
 
 Summary

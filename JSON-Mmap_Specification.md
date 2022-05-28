@@ -23,7 +23,7 @@ overwrite the entire data file, leading to dramatic performance improvement.
 - [Introduction](#introduction)
     * [Background](#background)
     * [Overview](#overview)
-- [Grammar](#grammar)
+- [Syntax](#syntax)
     * [Path string](#path-string)
     * [Locator vector](#locator-vector)
     * [Metadata keys and values](#metadata-keys-and-values)
@@ -84,7 +84,7 @@ Syntax
 A JSON-Mmap must be written as an **array of arrays**, with each element being an
 **array of minimum two elements**, for example, in the below form
 
-```
+```json
 [
     [ "name1", value1 ],
     [ "name2", value2 ],
@@ -125,7 +125,8 @@ the string must follow the below format
 Note: JSON-Mmap path specifier does not support additional annotations in JSONPath, such as `..` or `@` operator
 
 For example, for the below JSON (or JSON-like) object
-```
+
+```json
 {
     "name": "Andy",
     "school": "Hood",
@@ -183,12 +184,121 @@ where
 
 ## Metadata keys and values
 
+Optionally, one can add `["name", value]` pairs in the form of a 2-element array in the JSON-Mmap to
+provide useful metadata information. In such case, the `"name"` string must not start with letter `$`.
+
+To ensure high performance when using JSON-Mmap, it is highly recommended to only use simple value
+forms, such as numbres or strings in the metadata entries.
+
+In the below table, we show a list of metadata examples.
+
+|                  Metadata Key                |                            Value                           |
+|----------------------------------------------|------------------------------------------------------------|
+|`["MmapVersion", "0.5"`                       | the JSON-Mmap specification version number                 |
+|`["ReferenceFileName","dat.json"]`            | the original referenced data file name                     |
+|`["ReferenceFileURI","https://.../data.json"]`| the original referenced data file URL                      |
+|`["ReferenceFileBytes": 92021]`               | the byte size of the referenced data file                  |
+|`["ReferenceFileSHA256", "0ACA987B..."]`      | a string storing the SHA256 hash key of the referenced file|
+
+The file location metadata such as `"ReferenceFileName"` and `"ReferenceFileURI"` are
+only for information purposes only, and shall not be in conflict with the 
 
 ### Storage of the JSON-Mmap table
 
+The JSON-Mmap table can be stored in 3 possible locations
 
-Suggested use of JSON-Mmap
-------------------------
+#### In-line direct form
+
+The JSON-Mmap can be directly stored as the header of the referenced JSON/binary
+JSON data in the form of a concatenated JSON object. An example is shown below
+
+```json
+[
+    ["MmapVersion", "0.5"],
+    ["Comment", "mmap for data1"],
+    ["$",     [...]],
+    ["$.key", [...]],
+    ...
+]{
+    data1
+}
+```
+
+An in-line JSON-Mmap is automatically assumed to be associated with the concatenated
+JSON object immediately following the mmap table; the `offset` record in
+all **locator vector** assumes the start of the referenced data buffer immediately
+follows the last signficant character of the JSON-Mmap (in the above case,
+the closing bracket `]`).
+
+When white-spaces are inserted between the JSON-Mmap and the following JSON object,
+such as new-lines `\n` or spaces, the length of such padded bytes must be considered
+in the `offset` records.
+
+Multiple inline JSON-Mmap tables can be used in the same document, each preceding
+its associated JSON object
+```json
+[["Comment", "mmap for data1"], ["$", [...]],...]{data1}
+[["Comment", "mmao for data2"], ["$", [...]],...]{data2}
+```
+
+#### In-line embedded form
+
+When a JSON-Mmap table is not directly stored as a root-level object, such as shown in the
+below example as a sub-element of a root-level object `"_DataInfo_"`, the JSON-Mmap is again
+assumed to be associated with the concatenated JSON object immediately following the last
+significant character of the root-level container that encloses the mmap table (in this case,
+the closing `}` of the `"_DataInfo_"` object).
+
+```json
+{
+    "_DataInfo_": {
+        "Creator": "NeuroSJON",
+        "Comment": "NeuroSJON",
+        "mmap": [
+            ["MmapVersion", "0.5"],
+            ["Comment", "mmap for data1"],
+            ["$",     [...]],
+            ["$.key", [...]],
+            ...
+        }
+    }
+}{
+    data1
+}
+```
+
+Similar to the in-line direct form, multiple embedded JSON-Mmap can be used in the same
+document to reference to multiple subsequent root-level JSON objects.
+
+#### Standalone form
+
+A JSON-Mmap can be stored in a standalone file and stored separately from the associated
+data file. A user or application shall apply the mmap to its matching associated data
+file. It is suggested to use the `ReferenceFileSHA256` hash key, if present, to ensrure
+the appropriate match of the mmap and the data.
+
+Below, we show an example of a paired JSON-mmap and data files.
+
+Standalone JSON-mmap file `data1.json.jmmap`:
+```json
+[
+    ["MmapVersion", "0.5"],
+    ["ReferenceFileName", "data1.json"],
+    ["ReferenceFileSHA256", "099AC812..."],
+    ["$",     [...]],
+    ["$.key", [...]],
+    ...
+]
+```
+and the associated data file `data1.json`:
+```
+{
+    data1
+}
+```
+
+Sample utilities of JSON-Mmap
+------------------------------
 
 ### Fast data-record disk reading
 
@@ -202,8 +312,8 @@ Suggested use of JSON-Mmap
 Recommended File Specifiers
 ------------------------------
 
-For the text-based JData file, the recommended file suffix is **`".jmmap"`**; for 
-the binary JData file, the recommended file suffix is **`".bmmap"`**.
+For standalone JSON-based JData file, the recommended file suffix is **`".jmmap"`**; for 
+the binary JData (BJData) file, the recommended file suffix is **`".bmmap"`**.
 
 
 Summary

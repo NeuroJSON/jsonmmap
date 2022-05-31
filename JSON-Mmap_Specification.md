@@ -4,18 +4,18 @@ JSON-Mmap: A Specification for JSON/binary JSON memory-map (mmap) for fast file 
 - **Status of this document**: This document is currently under development.
 - **Copyright**: (C) Qianqian Fang (2022) <q.fang at neu.edu>
 - **License**: Apache License, Version 2.0
-- **Revision Number**: 1 (Draft 1)
+- **Specification Revision**: 1 (Draft 1)
 - **Version Number**: v0.5
 - **Abstract**:
 
-> JSON and binary-JSON formats are ubiquitously supported but were designed largely
+> JSON and binary-JSON formats are ubiquitously supported but are designed largely
 for storage of lightweight hierachical data. However, when accessing large data records
-inside a JSON/binary-JSON file, file reading/writing can be slow. This specification
+inside a JSON/binary-JSON file, file reading and writing can be slow. This specification
 aims to define a lightweight memory-mapping (mmap) table to enable fast disk-mapped
-file IO for JSON and binary JSON formats. This JSON-Mmap table can be embedded in the same
-data file or in a separate file. Using the byte-offset/length information stored in the
-JSON-Mmap allows to read or update particular data record without needing to parse or
-overwrite the entire data file, leading to dramatic performance improvement.
+file IO for JSON and binary JSON formats. A JSON-Mmap table can be embedded in the same
+data file or store in a separate file. Using the byte-offset/length information stored 
+in the JSON-Mmap allows to read or update particular data record without needing to parse
+or overwrite the entire data file, leading to dramatic performance improvement.
 
 
 ## Table of Content
@@ -72,20 +72,21 @@ In this specification, we aim to define a lightweight JSON-based mmap-table stru
 can be embedded inside a JSON or binary JSON file or stored side-by-side along the JSON/binary
 JSON file to drmatically enhance their file IO efficiencies. The JSON-Mmap table is lightweight
 and follows a simple structure to record essential serialization data of key records, including
-disk/memory linear byte-offset and length. Reading/writing JSON-Mmap table does not require
-additional parser/writer because it must be stored/accessed using the same format as the
-respective target data file (JSON or binary-JSON). Creating and utilizing JSON-Mmap records
+disk/memory linear byte-offset and length, with fine-grained capability to access individual 
+data elements. Reading/writing JSON-Mmap table does not require additional parser/writer
+because it must be stored/accessed using the same format as the respective associated 
+data file (JSON or binary-JSON). Creating and utilizing JSON-Mmap records
 can be particularly beneficial when using the combination of JSON/[BJData](https://neurojson.org/bjdata)
-serializations with [JData annotation](https://neurojson.org/jdata) methods for storing and
-exchange of large sized scientific data files such as medical imaging scans.
+serializations with language-independent semantic [JData-based annotations](https://neurojson.org/jdata)
+for storage and exchange of large-sized scientific data files such as medical imaging scans.
 
 Syntax
 ------------------------
 
 A JSON-Mmap must be written as an **array of arrays**, with each element being an
-**array of minimum two elements**, for example, in the below form
+**array of minimum two elements**, as shown in the below form
 
-```json
+```javascript
 [
     [ "name1", value1 ],
     [ "name2", value2 ],
@@ -98,8 +99,8 @@ A JSON-Mmap must be written as an **array of arrays**, with each element being a
 
 In each of the sub-arrays, 
 - the first element must be a string; such string can be one of the two cases:
-    - a string starting with ASCII letter `$` (`0x24` in hex) is referred to as a **path**,
-      representing a [JSON-Path](https://github.com/json-path/JsonPath) like reference, 
+    - a string starting with ASCII letter `$` (`0x24` in hex, ASCII code 36) is referred to as
+      a **path**, representing a [JSON-Path](https://github.com/json-path/JsonPath) styled reference,
       pointing towards a specific data record to the associated JSON/binary JSON file, and
     - any string that does not start with `$` is referred to as a **metadata key**, to store
       optional auxillary information related to the JSON-Mmap,
@@ -111,7 +112,7 @@ In each of the sub-arrays,
 
 ### Significant and insignficant characters
 
-In a JSON document, zero or more whitespaces can be inserted between data items without alternating
+In a JSON document, zero or more permitted whitespaces can be inserted between data items without alternating
 the data structure stored in the document. Four whitespace characters are permitted:
 
 - space (` `): 0x20 in hex (ASCII code: 32)
@@ -122,9 +123,10 @@ the data structure stored in the document. Four whitespace characters are permit
 We call the above whitespace characters as **insignificant characters** and all non-whitespace 
 characters as **significant characters** in a JSON document.
 
-Similarly, in a BJData/UBJSON document, zero or more `no-op` marker `N` can be inserted between data
+Similarly, in a BJData/UBJSON document, zero or more `no-op` markers `N` can be inserted between data
 items without alternating the data stored in such file. As a result, we call the `no-op` marker `N` as
-**insignificant character** and all other bytes that are not `no-op` are called **significant characters**.
+the **insignificant character** and all other bytes that are not `no-op` are called **significant characters**
+when referencing a BJData or UBJSON data file.
 
 Other binary JSON formats such as CBOR and MessagePack do not support `no-op` markers or optional
 whitespaces, therefore, all bytes in these files are considered signficiant characters.
@@ -138,12 +140,12 @@ the string must follow the below format
 |      Notation      |                                                   Meaning                                                   |
 |--------------------|-------------------------------------------------------------------------------------------------------------|
 |`$`                 | the root object, must be the first letter of all paths                                                      |
-|`$[i]`              | i=0,1,2,..., denoting the (i+1)th root-level object in an concatenated JSON (CJSON) or binary JSON document |
-|`.`                 | child of the object on the left                                                                             |
-|`[i]`               | i=0,1,2,..., denoting the (i+1)th child of an array on the left                                             |
+|`$i`                | i=0,1,2,..., denoting the (i+1)th root-level object in an concatenated JSON (CJSON) or binary JSON document |
+|`.`                 | child of the object to the left                                                                             |
+|`[i]`               | i=0,1,2,..., denoting the (i+1)th child of an array to the left                                             |
 |`.key` or `.['key']`| a named child with a string-typed name `key`; using `['key']` is required when `key` has `.` ,`[` or `]`    |
 
-Note: JSON-Mmap path specifier does not support additional annotations in JSONPath, such as `..` or `@` operator
+Note: JSON-Mmap path specifier does not support additional syntax in JSON-Path, such as `..` or `@` operator
 
 For example, for the below JSON (or JSON-like) object
 
@@ -169,16 +171,16 @@ For example, for the below JSON (or JSON-like) object
 }
 ```
 the following 
-|                   Path               |                  Reference Value                          |
-|--------------------------------------|-----------------------------------------------------------|
-|`$[0].name`                           | "Andy"                                                    |
-|`$[0].schedule.Monday[0]`             | 8                                                         |
-|`$[0].schedule.Friday.AM`             | 9                                                         |
-|`$[0].schedule.Friday.PM`             | [14.5, 15.5]                                              |
-|`$[0].schedule.Friday.PM[1]`          | 15.5                                                      |
-|`$[0]['schedule']['Friday']['PM'][1]` | 15.5 (same as above)                                      |
-|`$[1]`                                | the entire 2nd root-level object `{"name":"Leo",...}`     |
-|`$[1].schedule`                       | the value of the `schedule` object `{"Wednesday": [10]}`  |
+|                 Path               |                  Reference Value                          |
+|------------------------------------|-----------------------------------------------------------|
+|`$0.name`                           | "Andy"                                                    |
+|`$0.schedule.Monday[0]`             | 8                                                         |
+|`$0.schedule.Friday.AM`             | 9                                                         |
+|`$0.schedule.Friday.PM`             | [14.5, 15.5]                                              |
+|`$0.schedule.Friday.PM[1]`          | 15.5                                                      |
+|`$0['schedule']['Friday']['PM'][1]` | 15.5 (same as above)                                      |
+|`$1`                                | the entire 2nd root-level object `{"name":"Leo",...}`     |
+|`$1.schedule`                       | the value of the `schedule` object `{"Wednesday": [10]}`  |
 
 
 ### Locator vector
@@ -190,17 +192,16 @@ The locator vector must be an array (can be empty). It should have the following
 where
 
 - (recommended) the first number `<start>`, if present, must be an integer, denoting the byte position 
-  (starting from 1) of the first significant character of the referenced value from the begining of 
-  the referenced document, 
+  (starting from 1) of the first significant character of the referenced value from the start of 
+  the referenced document (defined in [Storage of the JSON-Mmap table](#storage-of-the-json-mmap-table)), 
 - (recommended) the second number `<length>`, if present, must be an intger, denoting the end-to-end byte-length
-  of the referenced value between the first significant character and the last significant character
-  (inclusive)
+  of the referenced value between the first and the last significant character (including both ends),
 - (optional) the third number, `<whitespace-byte-length-before>`, if present, must be an integer, denoting the
-  byte-lengt of all whitespaces (insignificant character) before the first signficiant character and
-  after the separator mark `,` with the preceding objects, or a significant character of the enclosing parent object.
+  byte-length of all whitespaces (insignificant character) **before** the first signficiant character and
+  after the separator mark `,` with the preceding objects, or a significant character of the enclosing parent object,
 - (optional) the forth number, `<whitespace-byte-length-after>`, if present, must be an integer, denoting the
-  byte-lengt of all whitespaces (insignificant character) after the last signficiant character and
-  before the separator mark `,` with the following objects, or the next significant character of the parent object.
+  byte-length of all whitespaces (insignificant character) **after** the last signficiant character and
+  before the separator mark `,` with the following objects, or the next significant character of the parent object,
 - additional elements in the locator vector are reserved for future extension of this specification
 
 Both the optional `<whitespace-byte-length-before>` and `<whitespace-byte-length-after>` records are
@@ -208,12 +209,12 @@ designed for the purpose of **in-place on-disk value replacement** of the data r
 [Sample utilities of JSON-Mmap](#sample-utilities-of-json-mmap) section for detailed discussions.
 
 For example, for the below JSON string buffer
-```json
+```javascript
 1         11        21        31        41        51        61        71        81 (byte index)
 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 
 {"name" :  "Andy" , "schedule": { "Mon": [ 10 , 14], "Tue": null, "Wed":10.5 } }
            ^--                  ^--      ^--                ^--         ^--    : starting positions
-         ‾‾                    ‾        ‾ ‾    ‾           ‾                   : preceding whitespaces
+         --                    -        - -    -          -                    : preceding whitespaces
 ```
 
 the corresponding JSON-Mmap is
@@ -231,16 +232,16 @@ the corresponding JSON-Mmap is
 **Note**: a JSON-Mmap does not have to contain mappings of all data elements of a document; it may contain
 only a selected subset of data elements.
 
-Similarly, the above JSON document can also be stored as a [BJData](https://neurojson.org/bjdata/draft2)/
+Similarly, the above JSON document can also be stored as a compact [BJData](https://neurojson.org/bjdata/draft2)/
 [UBJSON](http://ubjson.org/) buffer in the below form (here numbers are printed in ASCII form instead
 of their binary forms; we adjusted the byte-index indicators accordingly to match their correct binary
 lengths; the `name` section of the data are underscored for easy readability)
 
-```
+```javascript
 1         11        21        31          41          53        61        71    (byte index)
 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3  5  7 9 1 3 5 7 9   3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3
 {U4nameSU4AndyU4schedule{U3Mon[i10i14]U3TueZU3Wedd10.5}}
- ‾‾‾‾‾‾       ‾‾‾‾‾‾‾‾‾‾ ‾‾‾‾‾        ‾‾‾‾‾ ‾‾‾‾‾
+ ______       __________ _____        _____ _____
 ```
 the corresponding JSON-Mmap is
 ```json
@@ -255,39 +256,43 @@ the corresponding JSON-Mmap is
 ]
 ```
 
+The JSON-Mmap does not have to contain records for all sub-elements. It may store only a subset of the
+data records, especially those that require fast access, such as a large array or binary buffer.
+
 ## Metadata keys and values
 
 Optionally, one can add `["name", value]` pairs in the form of a 2-element array in the JSON-Mmap to
-provide useful metadata information. In such case, the `"name"` string must not start with letter `$`.
+provide additional metadata information. In such case, the `"name"` string must not start with letter `$`.
 
 To ensure high performance when using JSON-Mmap, it is highly recommended to only use simple value
-forms, such as numbres or strings in the metadata entries.
+forms, such as numbers or strings, in the metadata entries.
 
 In the below table, we show a list of metadata examples.
 
-|                  Metadata Key                |                            Value                           |
+|                 Metadata Pair                |                          Utility                           |
 |----------------------------------------------|------------------------------------------------------------|
-|`["MmapVersion", "0.5"`                       | the JSON-Mmap specification version number                 |
-|`["ReferenceFileName","dat.json"]`            | the original referenced data file name                     |
-|`["ReferenceFileURI","https://.../data.json"]`| the original referenced data file URL                      |
-|`["ReferenceFileBytes": 92021]`               | the byte size of the referenced data file                  |
+|`["MmapVersion", "0.5"]`                      | the JSON-Mmap specification version number                 |
+|`["ReferenceFileName","data.json"]`           | the original referenced/associated data file name          |
+|`["ReferenceFileURI","https://.../data.json"]`| the original referenced/associated data file URL           |
+|`["ReferenceFileBytes": 92021]`               | the byte size of the referenced/associated data file       |
 |`["ReferenceFileSHA256", "0ACA987B..."]`      | a string storing the SHA256 hash key of the referenced file|
-|`["Comment", "a user-defined comment"`        | a comment                                                  |
-|`["MmapByteLength", 2560]`                    | the total byte-length of the mmap table                    |
+|`["Comment", "a user-defined comment"]`       | a comment                                                  |
+|`["MmapByteLength", 2560]`                    | the total byte-length of the mmap table(include this entry)|
 
 The file location metadata such as `"ReferenceFileName"` and `"ReferenceFileURI"` are
-only for information purposes only, and shall not be in conflict with the 
+only for information purposes only, and shall not be in conflict with the rules defining the start of
+the referenced data, depending on the storage location of the JSON-Mmap as detailed in the below section.
 
 ### Storage of the JSON-Mmap table
 
-The JSON-Mmap table can be stored in 3 possible locations
+The JSON-Mmap table can be stored in 3 possible locations, detailed below.
 
 #### Inline direct form
 
 The JSON-Mmap can be directly stored as the header of the referenced JSON/binary
 JSON data in the form of a concatenated JSON object. An example is shown below
 
-```json
+```javascript
 [
     ["MmapVersion", "0.5"],
     ["Comment", "mmap for data1"],
@@ -306,25 +311,26 @@ follows the last signficant character of the JSON-Mmap (in the above case,
 the closing bracket `]`).
 
 When whitespaces are inserted between the JSON-Mmap and the following JSON object,
-such as new-lines `\n` or spaces, the length of such padded bytes must be considered
-in the `start` records.
+such as new-lines `\n` or spaces, the length of such padded bytes must be counted
+in the `start` records in all locator vectors.
 
 Multiple inline JSON-Mmap tables can be used in the same document, each preceding
-its associated JSON object
-```json
+its associated JSON object, for example
+
+```javascript
 [["Comment", "mmap for data1"], ["$", [...]],...]{data1}
-[["Comment", "mmao for data2"], ["$", [...]],...]{data2}
+[["Comment", "mmap for data2"], ["$", [...]],...]{data2}
 ```
 
 #### Inline embedded form
 
 When a JSON-Mmap table is not directly stored as a root-level object, such as shown in the
-below example as a sub-element of a root-level object `"_DataInfo_"`, the JSON-Mmap is again
+below example as a sub-element of a root-level object `"_DataInfo_"`, the JSON-Mmap is
 assumed to be associated with the concatenated JSON object immediately following the last
 significant character of the root-level container that encloses the mmap table (in this case,
 the closing `}` of the `"_DataInfo_"` object).
 
-```json
+```javascript
 {
     "_DataInfo_": {
         "Creator": "NeuroJSON",
@@ -342,20 +348,21 @@ the closing `}` of the `"_DataInfo_"` object).
 }
 ```
 
-Similar to the inline direct form, multiple embedded JSON-Mmap can be used in the same
-document to reference to multiple subsequent root-level JSON objects.
+Similar to the inline direct form, multiple embedded JSON-Mmap tables can be used in the same
+document as references to multiple subsequent root-level JSON objects.
 
 #### Standalone form
 
-A JSON-Mmap can be stored in a standalone file and stored separately from the associated
-data file. A user or application shall apply the mmap to its matching associated data
-file. It is suggested to use the `ReferenceFileSHA256` hash key, if present, to ensrure
-the appropriate match of the mmap and the data.
+A JSON-Mmap can also be stored in a standalone file separately from the associated
+data file. A user or application must apply the mmap to its matching associated data
+file. Failure to do so may result in corrputed data records. It is suggested to use
+the `ReferenceFileSHA256` hash key, if present, to ensrure the appropriate match of
+the mmap and its referenced data.
 
-Below, we show an example of a paired JSON-mmap and data files.
+Below, we show an example of a paired JSON-Mmap and data files.
 
 Standalone JSON-mmap file `data1.json.jmmap`:
-```json
+```javascript
 [
     ["MmapVersion", "0.5"],
     ["ReferenceFileName", "data1.json"],
@@ -366,7 +373,7 @@ Standalone JSON-mmap file `data1.json.jmmap`:
 ]
 ```
 and the associated data file `data1.json`:
-```
+```javascript
 {
     data1
 }
@@ -380,7 +387,7 @@ Sample utilities of JSON-Mmap
 ------------------------------
 
 When parsing a JSON or binary JSON file in which JSON-Mmap records are anticipated, an efficient
-parser may take advanrage of the byte-offset/length information present in such data structure
+parser may take advantage of the byte-offset/length information present in such data structure
 to achieve high performance file reading and writing.
 
 ### Fast read-only data-level access
@@ -388,7 +395,7 @@ to achieve high performance file reading and writing.
 For simple files containing inline JSON-Mmap tables, the parser is recommended to read only the
 first root-level object and identify whether it contains an mmap table. If an mmap table is found,
 the parser can then utilize the individual data record information in mmap to achieve fast read-only
-access to individual records without eneding to read/parse the entire referenced data buffer.
+access to individual records without needing to read/parse the entire referenced data buffer.
 
 ```
 [
@@ -400,6 +407,9 @@ access to individual records without eneding to read/parse the entire referenced
 
 On can utilize the `start` and `length` information from the mmap table to quickly read/parse
 a specific data record without needing to read/parse the entire data file
+
+The below C-code snippet conceptually demonstrate one of many ways to utilize such
+information in data reading
 
 ```c
 int read_json_int_key(const int start, const int length, int *value, const char *datafile){
@@ -467,7 +477,7 @@ between several strategies:
 
 - one may warn the user of over-length and refuse to write the new value
 - one may truncate the data, when permitted, and store partial data
-- one may write a compact JSON-Path like path string, such as `"$[1]"}`, in the place of the 
+- one may write a compact JSON-Path like path string, such as `"$1"`, in the place of the 
   original record, and point it to a new data record appended at the end of the file/stream.
 
 In the last case, 

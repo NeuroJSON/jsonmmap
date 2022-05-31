@@ -145,7 +145,8 @@ the string must follow the below format
 |`[i]`               | i=0,1,2,..., denoting the (i+1)th child of an array to the left                                             |
 |`.key` or `.['key']`| a named child with a string-typed name `key`; using `['key']` is required when `key` has `.` ,`[` or `]`    |
  
-Note: JSON-Mmap path specifier does not support additional syntax in JSON-Path, such as `..` or `@` operator
+Note: JSON-Mmap path specifier does not support additional syntax in JSON-Path, such as `..` or `@` operator. Also, `$` is
+the same as `$0`; however, when the referenced document contains only a single root-level-object, using `$` is preferred than `$0`.
  
 For example, for the below JSON (or JSON-like) object
  
@@ -214,7 +215,7 @@ For example, for the below JSON string buffer
 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9 1 3 5 7 9
 {"name" :  "Andy" , "schedule": { "Mon": [ 10 , 14], "Tue": null, "Wed":10.5 } }
            ^--                  ^--      ^--                ^--         ^--    : starting positions
-         --                    -        - -    -          -                    : preceding whitespaces
+         __                    _        _ _    _           _                   : preceding whitespaces
 ```
  
 the corresponding JSON-Mmap is
@@ -321,7 +322,11 @@ its associated JSON object, for example
 [["Comment", "mmap for data1"], ["$", [...]],...]{data1}
 [["Comment", "mmap for data2"], ["$", [...]],...]{data2}
 ```
- 
+
+To avoid parsing complexities, when mutliple inline JSON-Mmap records are used, each
+JSON-Mmap can only reference the single JSON root-object immediate following. That means
+it cannot include path strings such as `$1`, `$2` etc.
+
 #### Inline embedded form
  
 When a JSON-Mmap table is not directly stored as a root-level object, such as shown in the
